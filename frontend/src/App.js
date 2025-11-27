@@ -722,7 +722,7 @@ function AdminRoutesPage() {
                 ))}
               </TableBody>
             </Table>
-          </TableContent>
+          </CardContent>
         </Card>
       </div>
     </div>
