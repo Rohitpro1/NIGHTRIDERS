@@ -58,7 +58,12 @@ export default function MapView({ routeIdToShow = "e93ea2bb-c548-4ec6-a388-2fa84
   });
 
   return (
-    <MapContainer center={center} zoom={15} style={{ height: "100vh", width: "100%" }}>
+   <MapContainer
+  key={center.join(",")}     // <--- THIS IS IMPORTANT
+  center={center}
+  zoom={16}
+  style={{ height: "100vh", width: "100%" }}
+>
       <TileLayer
         attribution='&copy; OpenStreetMap contributors'
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -82,5 +87,6 @@ export default function MapView({ routeIdToShow = "e93ea2bb-c548-4ec6-a388-2fa84
     </MapContainer>
   );
 }
+
 
 
