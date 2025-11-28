@@ -999,6 +999,7 @@ function App() {
           <Route path="/admin/routes" element={<AdminRoutesPage />} />
           <Route path="/admin/update-bus" element={<AdminUpdateBusPage />} />
           <Route path="/admin/buses" element={<AdminBusListPage />} />
+          <Route path="/route-map"  element={<MapView routeIdToShow="e93ea2bb-c548-4ec6-a388-2fa84f710341"/>} />
         </Routes>
         <Toaster position="top-right" />
       </BrowserRouter>
