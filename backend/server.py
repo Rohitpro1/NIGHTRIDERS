@@ -34,6 +34,7 @@ class Route(BaseModel):
     starting_point: str
     ending_point: str
     stops: List[str]
+    coordinates: List[dict] = Field(default_factory=list)
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 class RouteCreate(BaseModel):
