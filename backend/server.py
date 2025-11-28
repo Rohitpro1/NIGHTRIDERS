@@ -37,12 +37,14 @@ class Route(BaseModel):
     coordinates: List[dict] = Field(default_factory=list)
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
+
 class RouteCreate(BaseModel):
     route_number: str
     route_name: str
     starting_point: str
     ending_point: str
     stops: List[str]
+    coordinates: List[dict] = Field(default_factory=list)   # <- safe default
 
 class RouteUpdate(BaseModel):
     route_number: Optional[str] = None
@@ -50,6 +52,8 @@ class RouteUpdate(BaseModel):
     starting_point: Optional[str] = None
     ending_point: Optional[str] = None
     stops: Optional[List[str]] = None
+    coordinates: Optional[List[dict]] = None
+
 
 class Bus(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -101,6 +105,11 @@ async def init_sample_data():
                 "starting_point": "Central Station",
                 "ending_point": "Airport",
                 "stops": ["Central Station", "Park Square", "Mall Junction", "Tech Park", "Airport"],
+                "coordinates": [
+                    {"lat": 12.8251353, "lng": 77.5148474},
+                    {"lat": 12.8262000, "lng": 77.5155000},
+                    {"lat": 12.8271000, "lng": 77.5162000}
+                ],
                 "created_at": datetime.now(timezone.utc).isoformat()
             },
             {
@@ -110,6 +119,11 @@ async def init_sample_data():
                 "starting_point": "Railway Station",
                 "ending_point": "Industrial Area",
                 "stops": ["Railway Station", "Market Street", "Hospital", "University", "Industrial Area"],
+                "coordinates": [
+                    {"lat": 12.8251353, "lng": 77.5148474},
+                    {"lat": 12.8262000, "lng": 77.5155000},
+                    {"lat": 12.8271000, "lng": 77.5162000}
+                ],
                 "created_at": datetime.now(timezone.utc).isoformat()
             },
             {
@@ -119,12 +133,17 @@ async def init_sample_data():
                 "starting_point": "Beach Road",
                 "ending_point": "Harbor",
                 "stops": ["Beach Road", "Marina", "Lighthouse", "Port Area", "Harbor"],
+                "coordinates": [
+                    {"lat": 12.8251353, "lng": 77.5148474},
+                    {"lat": 12.8262000, "lng": 77.5155000},
+                    {"lat": 12.8271000, "lng": 77.5162000}
+                ],
                 "created_at": datetime.now(timezone.utc).isoformat()
             }
         ]
-        
+
         await db.routes.insert_many(sample_routes)
-        
+
         # Sample buses
         route_ids = [route["id"] for route in sample_routes]
         sample_buses = [
