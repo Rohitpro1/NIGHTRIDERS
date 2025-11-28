@@ -1002,7 +1002,7 @@ function App() {
           <Route path="/admin/update-bus" element={<AdminUpdateBusPage />} />
           <Route path="/admin/buses" element={<AdminBusListPage />} />
           <Route path="/route-map"  element={<MapView routeIdToShow="e93ea2bb-c548-4ec6-a388-2fa84f710341"/>} />
-  <Route path="/eta" element={<EtaView busId="BUS-202-B" />} />
+ <Route path="/eta/:busId" element={<EtaView />} />
         </Routes>
         <Toaster position="top-right" />
       </BrowserRouter>
