@@ -13,7 +13,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { toast, Toaster } from 'sonner';
 import { Bus, MapPin, Route as RouteIcon, Trash2, Edit, Plus, Search, LogOut, Navigation } from 'lucide-react';
-import MapView from "@/components/MapView";  
+import MapView from "@/components/MapView";
+import EtaView from "./components/EtaView";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -1001,6 +1002,7 @@ function App() {
           <Route path="/admin/update-bus" element={<AdminUpdateBusPage />} />
           <Route path="/admin/buses" element={<AdminBusListPage />} />
           <Route path="/route-map"  element={<MapView routeIdToShow="e93ea2bb-c548-4ec6-a388-2fa84f710341"/>} />
+  <Route path="/eta" element={<EtaView busId="V2BMTC" />} />
         </Routes>
         <Toaster position="top-right" />
       </BrowserRouter>
