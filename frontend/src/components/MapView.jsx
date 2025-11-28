@@ -39,6 +39,8 @@ export default function MapView({ routeIdToShow = "e93ea2bb-c548-4ec6-a388-2fa84
       .then((r) => r.json())
       .then((routes) => {
         const route = routes.find((r) => r.id === routeIdToShow);
+        console.log("ROUTE DATA:", route);
+console.log("ROUTE COORDS:", route.coordinates);
         if (route && Array.isArray(route.coordinates)) setRouteCoords(route.coordinates);
       })
       .catch(console.error);
@@ -87,6 +89,7 @@ export default function MapView({ routeIdToShow = "e93ea2bb-c548-4ec6-a388-2fa84
     </MapContainer>
   );
 }
+
 
 
 
