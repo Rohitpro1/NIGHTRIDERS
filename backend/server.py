@@ -10,22 +10,37 @@ from typing import List, Optional
 import uuid
 from datetime import datetime, timezone
 import bcrypt
+import math
 
+# -------------------------
+# Haversine formula
+# -------------------------
+def haversine(lat1, lon1, lat2, lon2):
+    R = 6371 * 1000  # meters
+    phi1 = math.radians(lat1)
+    phi2 = math.radians(lat2)
+    dphi = math.radians(lat2 - lat1)
+    dlambda = math.radians(lon2 - lon1)
+
+    a = math.sin(dphi / 2)**2 + math.cos(phi1) * math.cos(phi2) * math.sin(dlambda / 2)**2
+    return R * (2 * math.atan2(math.sqrt(a), math.sqrt(1 - a)))
+
+# -------------------------
+# Load environment
+# -------------------------
 ROOT_DIR = Path(__file__).parent
-load_dotenv(ROOT_DIR / '.env')
+load_dotenv(ROOT_DIR / ".env")
 
-# MongoDB connection
-mongo_url = os.environ['MONGO_URL']
+mongo_url = os.environ["MONGO_URL"]
 client = AsyncIOMotorClient(mongo_url)
-db = client[os.environ['DB_NAME']]
+db = client[os.environ["DB_NAME"]]
 
-# Create the main app without a prefix
 app = FastAPI()
-
-# Create a router with the /api prefix
 api_router = APIRouter(prefix="/api")
 
-# Models
+# -------------------------
+# MODELS
+# -------------------------
 class Route(BaseModel):
     model_config = ConfigDict(extra="ignore")
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
@@ -44,7 +59,8 @@ class RouteCreate(BaseModel):
     starting_point: str
     ending_point: str
     stops: List[str]
-    coordinates: List[dict] = Field(default_factory=list)   # <- safe default
+    coordinates: List[dict] = Field(default_factory=list)
+
 
 class RouteUpdate(BaseModel):
     route_number: Optional[str] = None
@@ -63,8 +79,9 @@ class Bus(BaseModel):
     route_name: str
     latitude: float
     longitude: float
-    crowd_level: str  # Low, Medium, High
+    crowd_level: str
     last_updated: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
 
 class BusUpdate(BaseModel):
     bus_id: str
@@ -74,123 +91,86 @@ class BusUpdate(BaseModel):
     longitude: float
     crowd_level: str
 
+
 class AdminLogin(BaseModel):
     password: str
+
 
 class AdminLoginResponse(BaseModel):
     success: bool
     message: str
     token: Optional[str] = None
 
-# Initialize admin password if not exists
+# -------------------------
+# INITIAL ADMIN CREATION
+# -------------------------
 async def init_admin():
     admin = await db.admin.find_one({"username": "admin"})
     if not admin:
-        hashed_password = bcrypt.hashpw("admin123".encode('utf-8'), bcrypt.gensalt())
-        await db.admin.insert_one({
-            "username": "admin",
-            "password": hashed_password.decode('utf-8')
+        hashed = bcrypt.hashpw("admin123".encode(), bcrypt.gensalt()).decode()
+        await db.admin.insert_one({"username": "admin", "password": hashed})
+
+# -------------------------
+# ETA API
+# -------------------------
+@api_router.get("/eta/{bus_id}")
+async def get_eta(bus_id: str):
+    bus = await db.buses.find_one({"bus_id": bus_id})
+    if not bus:
+        raise HTTPException(404, "Bus not found")
+
+    curr_lat = float(bus["latitude"])
+    curr_lng = float(bus["longitude"])
+    now_ts = datetime.utcnow().timestamp()
+
+    # Load route
+    route = await db.routes.find_one({"id": bus["route_id"]})
+    if not route:
+        raise HTTPException(404, "Route not found")
+
+    stops = route["stops"]
+    coords = route.get("coordinates", [])
+
+    # Ensure stop count matches coordinate count
+    if len(coords) != len(stops):
+        raise HTTPException(400, "Stops and coordinates mismatch")
+
+    # SPEED CALCULATION
+    prev = bus.get("prev_location")
+    speed_mps = 0
+
+    if prev:
+        dist = haversine(curr_lat, curr_lng, prev["lat"], prev["lng"])
+        dt = now_ts - prev["timestamp"]
+        if dt > 0:
+            speed_mps = dist / dt
+
+    # Save for next calculation
+    await db.buses.update_one(
+        {"bus_id": bus_id},
+        {"$set": {"prev_location": {"lat": curr_lat, "lng": curr_lng, "timestamp": now_ts}}}
+    )
+
+    # ETA per stop
+    eta_list = []
+    for stop_name, c in zip(stops, coords):
+        d = haversine(curr_lat, curr_lng, c["lat"], c["lng"])
+        eta_sec = d / speed_mps if speed_mps > 0 else None
+        eta_list.append({
+            "stop": stop_name,
+            "distance_meters": d,
+            "eta_seconds": eta_sec
         })
 
-# Initialize sample data
-async def init_sample_data():
-    routes_count = await db.routes.count_documents({})
-    if routes_count == 0:
-        # Sample routes
-        sample_routes = [
-            {
-                "id": str(uuid.uuid4()),
-                "route_number": "101",
-                "route_name": "City Center Express",
-                "starting_point": "Central Station",
-                "ending_point": "Airport",
-                "stops": ["Central Station", "Park Square", "Mall Junction", "Tech Park", "Airport"],
-                "coordinates": [
-                    {"lat": 12.8251353, "lng": 77.5148474},
-                    {"lat": 12.8262000, "lng": 77.5155000},
-                    {"lat": 12.8271000, "lng": 77.5162000}
-                ],
-                "created_at": datetime.now(timezone.utc).isoformat()
-            },
-            {
-                "id": str(uuid.uuid4()),
-                "route_number": "202",
-                "route_name": "Suburban Link",
-                "starting_point": "Railway Station",
-                "ending_point": "Industrial Area",
-                "stops": ["Railway Station", "Market Street", "Hospital", "University", "Industrial Area"],
-                "coordinates": [
-                    {"lat": 12.8251353, "lng": 77.5148474},
-                    {"lat": 12.8262000, "lng": 77.5155000},
-                    {"lat": 12.8271000, "lng": 77.5162000}
-                ],
-                "created_at": datetime.now(timezone.utc).isoformat()
-            },
-            {
-                "id": str(uuid.uuid4()),
-                "route_number": "303",
-                "route_name": "Coastal Route",
-                "starting_point": "Beach Road",
-                "ending_point": "Harbor",
-                "stops": ["Beach Road", "Marina", "Lighthouse", "Port Area", "Harbor"],
-                "coordinates": [
-                    {"lat": 12.8251353, "lng": 77.5148474},
-                    {"lat": 12.8262000, "lng": 77.5155000},
-                    {"lat": 12.8271000, "lng": 77.5162000}
-                ],
-                "created_at": datetime.now(timezone.utc).isoformat()
-            }
-        ]
+    return {
+        "current_speed_mps": speed_mps,
+        "current_speed_kmph": speed_mps * 3.6,
+        "eta": eta_list
+    }
 
-        await db.routes.insert_many(sample_routes)
-
-        # Sample buses
-        route_ids = [route["id"] for route in sample_routes]
-        sample_buses = [
-            {
-                "id": str(uuid.uuid4()),
-                "bus_id": "BUS-101-A",
-                "route_id": route_ids[0],
-                "route_name": "City Center Express",
-                "latitude": 28.6139,
-                "longitude": 77.2090,
-                "crowd_level": "Low",
-                "last_updated": datetime.now(timezone.utc).isoformat()
-            },
-            {
-                "id": str(uuid.uuid4()),
-                "bus_id": "BUS-202-B",
-                "route_id": route_ids[1],
-                "route_name": "Suburban Link",
-                "latitude": 28.7041,
-                "longitude": 77.1025,
-                "crowd_level": "Medium",
-                "last_updated": datetime.now(timezone.utc).isoformat()
-            },
-            {
-                "id": str(uuid.uuid4()),
-                "bus_id": "BUS-303-C",
-                "route_id": route_ids[2],
-                "route_name": "Coastal Route",
-                "latitude": 19.0760,
-                "longitude": 72.8777,
-                "crowd_level": "High",
-                "last_updated": datetime.now(timezone.utc).isoformat()
-            }
-        ]
-        
-        await db.buses.insert_many(sample_buses)
-
-@app.on_event("startup")
-async def startup_event():
-    await init_admin()
-    await init_sample_data()
-
-# Public Routes
-@api_router.get("/")
-async def root():
-    return {"message": "Urban Transport System API"}
-
+# -------------------------
+# CRUD ROUTES
+# -------------------------
 @api_router.get("/routes/search")
 async def search_routes(q: Optional[str] = None):
     if q:
@@ -199,194 +179,112 @@ async def search_routes(q: Optional[str] = None):
                 {"route_number": {"$regex": q, "$options": "i"}},
                 {"route_name": {"$regex": q, "$options": "i"}}
             ]
-        }, {"_id": 0}).to_list(100)
+        }, {"_id": 0}).to_list(200)
     else:
-        routes = await db.routes.find({}, {"_id": 0}).to_list(100)
-    
-    for route in routes:
-        if isinstance(route.get('created_at'), str):
-            route['created_at'] = datetime.fromisoformat(route['created_at'])
-
+        routes = await db.routes.find({}, {"_id": 0}).to_list(200)
     return routes
+
 
 @api_router.post("/buses/update-location")
 async def update_bus_location(data: dict):
     bus_id = data.get("bus_id")
-    latitude = data.get("latitude")
-    longitude = data.get("longitude")
+    lat = data.get("latitude")
+    lng = data.get("longitude")
 
-    if not all([bus_id, latitude, longitude]):
-        raise HTTPException(status_code=400, detail="Missing fields")
+    if not all([bus_id, lat, lng]):
+        raise HTTPException(400, "Missing fields")
 
-    result = await db.buses.update_one(
+    await db.buses.update_one(
         {"bus_id": bus_id},
-        {"$set": {
-            "latitude": latitude,
-            "longitude": longitude,
-            "last_updated": datetime.utcnow().isoformat()
-        }}
+        {"$set": {"latitude": lat, "longitude": lng, "last_updated": datetime.utcnow().isoformat()}}
     )
+    return {"status": "updated"}
 
-    return {"status": "success", "updated": result.modified_count}
 
 @api_router.get("/buses/live")
 async def get_live_buses():
-    buses = await db.buses.find({}, {"_id": 0}).to_list(100)
-    
-    for bus in buses:
-        if isinstance(bus.get('last_updated'), str):
-            bus['last_updated'] = datetime.fromisoformat(bus['last_updated'])
-    
-    return buses
+    return await db.buses.find({}, {"_id": 0}).to_list(200)
 
-# Admin Routes
+
+# Admin login
 @api_router.post("/admin/login", response_model=AdminLoginResponse)
 async def admin_login(credentials: AdminLogin):
     admin = await db.admin.find_one({"username": "admin"})
-    
     if not admin:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid credentials"
-        )
-    
-    stored_password = admin["password"].encode('utf-8')
-    if bcrypt.checkpw(credentials.password.encode('utf-8'), stored_password):
-        return AdminLoginResponse(
-            success=True,
-            message="Login successful",
-            token="admin_authenticated"
-        )
-    else:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid credentials"
-        )
+        raise HTTPException(401, "Invalid credentials")
 
+    if bcrypt.checkpw(credentials.password.encode(), admin["password"].encode()):
+        return AdminLoginResponse(success=True, message="Login successful", token="admin_authenticated")
+
+    raise HTTPException(401, "Invalid credentials")
+
+
+# -------------------------
+# CRUD ROUTES & BUSES
+# -------------------------
 @api_router.get("/admin/routes", response_model=List[Route])
 async def get_all_routes():
-    routes = await db.routes.find({}, {"_id": 0}).to_list(1000)
-    
-    for route in routes:
-        if isinstance(route.get('created_at'), str):
-            route['created_at'] = datetime.fromisoformat(route['created_at'])
-    
-    return routes
+    return await db.routes.find({}, {"_id": 0}).to_list(500)
+
 
 @api_router.post("/admin/routes", response_model=Route)
 async def create_route(route_input: RouteCreate):
-    route_dict = route_input.model_dump()
-    route_obj = Route(**route_dict)
-    
-    doc = route_obj.model_dump()
-    doc['created_at'] = doc['created_at'].isoformat()
-    
+    route = Route(**route_input.model_dump())
+    doc = route.model_dump()
+    doc["created_at"] = doc["created_at"].isoformat()
     await db.routes.insert_one(doc)
-    return route_obj
+    return route
+
 
 @api_router.put("/admin/routes/{route_id}", response_model=Route)
-async def update_route(route_id: str, route_update: RouteUpdate):
-    existing_route = await db.routes.find_one({"id": route_id}, {"_id": 0})
-    
-    if not existing_route:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Route not found"
-        )
-    
-    update_data = route_update.model_dump(exclude_unset=True)
-    
-    if update_data:
-        await db.routes.update_one(
-            {"id": route_id},
-            {"$set": update_data}
-        )
-    
-    updated_route = await db.routes.find_one({"id": route_id}, {"_id": 0})
-    
-    if isinstance(updated_route.get('created_at'), str):
-        updated_route['created_at'] = datetime.fromisoformat(updated_route['created_at'])
-    
-    return Route(**updated_route)
+async def update_route(route_id: str, data: RouteUpdate):
+    await db.routes.update_one({"id": route_id}, {"$set": data.model_dump(exclude_unset=True)})
+    updated = await db.routes.find_one({"id": route_id}, {"_id": 0})
+    return Route(**updated)
+
 
 @api_router.delete("/admin/routes/{route_id}")
 async def delete_route(route_id: str):
-    result = await db.routes.delete_one({"id": route_id})
-    
-    if result.deleted_count == 0:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Route not found"
-        )
-    
-    # Also delete buses associated with this route
+    await db.routes.delete_one({"id": route_id})
     await db.buses.delete_many({"route_id": route_id})
-    
-    return {"message": "Route deleted successfully"}
+    return {"message": "Route deleted"}
+
 
 @api_router.get("/admin/buses", response_model=List[Bus])
 async def get_all_buses():
-    buses = await db.buses.find({}, {"_id": 0}).to_list(1000)
-    
-    for bus in buses:
-        if isinstance(bus.get('last_updated'), str):
-            bus['last_updated'] = datetime.fromisoformat(bus['last_updated'])
-    
-    return buses
+    return await db.buses.find({}, {"_id": 0}).to_list(500)
+
 
 @api_router.post("/admin/buses/update", response_model=Bus)
-async def update_bus_location(bus_update: BusUpdate):
-    # Check if bus exists, if not create new one
-    existing_bus = await db.buses.find_one({"bus_id": bus_update.bus_id})
-    
-    bus_dict = bus_update.model_dump()
-    bus_obj = Bus(**bus_dict)
-    
-    doc = bus_obj.model_dump()
-    doc['last_updated'] = doc['last_updated'].isoformat()
-    
-    if existing_bus:
-        # Update existing bus
-        await db.buses.update_one(
-            {"bus_id": bus_update.bus_id},
-            {"$set": doc}
-        )
-    else:
-        # Create new bus
-        await db.buses.insert_one(doc)
-    
-    return bus_obj
+async def update_bus(bus_update: BusUpdate):
+    doc = Bus(**bus_update.model_dump()).model_dump()
+    doc["last_updated"] = datetime.utcnow().isoformat()
+    await db.buses.update_one({"bus_id": bus_update.bus_id}, {"$set": doc}, upsert=True)
+    return Bus(**doc)
+
 
 @api_router.delete("/admin/buses/{bus_id}")
 async def delete_bus(bus_id: str):
-    result = await db.buses.delete_one({"bus_id": bus_id})
-    
-    if result.deleted_count == 0:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Bus not found"
-        )
-    
-    return {"message": "Bus deleted successfully"}
+    await db.buses.delete_one({"bus_id": bus_id})
+    return {"message": "Bus deleted"}
 
-# Include the router in the main app
+
+# -------------------------
+# MIDDLEWARE
+# -------------------------
 app.include_router(api_router)
 
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
-    allow_origins=os.environ.get('CORS_ORIGINS', '*').split(','),
+    allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
-
+# -------------------------
+# SHUTDOWN
+# -------------------------
 @app.on_event("shutdown")
 async def shutdown_db_client():
     client.close()
