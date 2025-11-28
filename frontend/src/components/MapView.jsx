@@ -2,8 +2,7 @@
 import React, { useEffect, useState } from "react";
 import { MapContainer, TileLayer, Marker, Polyline, useMap } from "react-leaflet";
 import L from "leaflet";
-import "leaflet/dist/leaflet.css";
-import MapView from "@/components/MapView";  
+import "leaflet/dist/leaflet.css"; 
 
 // small helper component to draw polyline once map exists
 function DrawRoute({ coords, color = "blue", weight = 5 }) {
@@ -83,4 +82,5 @@ export default function MapView({ routeIdToShow = "e93ea2bb-c548-4ec6-a388-2fa84
     </MapContainer>
   );
 }
+
 
