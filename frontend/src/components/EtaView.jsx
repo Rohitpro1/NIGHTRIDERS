@@ -1,13 +1,18 @@
 // frontend/src/components/EtaView.jsx
 import React, { useEffect, useState } from "react";
+import { useParams } from "react-router-dom";
 
-export default function EtaView({ busId = "BUS-202-B" }) {
+export default function EtaView() {
+  const { busId } = useParams();   // ✅ dynamic bus ID from URL
   const BACKEND_BASE = "https://nightriders.onrender.com/api";
+
   const [etaData, setEtaData] = useState(null);
   const [error, setError] = useState(null);
 
   // FETCH ETA FUNCTION
   const fetchETA = () => {
+    if (!busId) return;  // safety check
+
     fetch(`${BACKEND_BASE}/eta/${busId}`)
       .then((r) => r.json())
       .then((data) => {
@@ -29,12 +34,14 @@ export default function EtaView({ busId = "BUS-202-B" }) {
 
   return (
     <div style={styles.container}>
-      <h1 style={styles.title}>Bus ETA Dashboard</h1>
+      <h1 style={styles.title}>Bus ETA Dashboard — {busId}</h1>
 
       <div style={styles.card}>
         <h2 style={styles.cardTitle}>Current Speed</h2>
         <p style={styles.speed}>
-          {etaData.current_speed_kmph.toFixed(2)} km/h
+          {etaData.current_speed_kmph
+            ? etaData.current_speed_kmph.toFixed(2)
+            : "0.00"} km/h
         </p>
       </div>
 
@@ -54,7 +61,6 @@ export default function EtaView({ busId = "BUS-202-B" }) {
               const dist = stop.distance_meters;
               const etaSec = stop.eta_seconds;
 
-              // Convert seconds → min:sec
               const mins = etaSec ? Math.floor(etaSec / 60) : "-";
               const secs = etaSec ? Math.floor(etaSec % 60) : "-";
 
@@ -76,9 +82,6 @@ export default function EtaView({ busId = "BUS-202-B" }) {
 }
 
 // -----------------------
-// SIMPLE INLINE STYLES
-// -----------------------
-
 const styles = {
   container: {
     padding: "20px",
