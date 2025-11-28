@@ -10,8 +10,10 @@
     <p id="status">Waiting for GPS permission...</p>
 
     <script>
-        const BACKEND_URL = "https://nightriders.onrender.com";  
-        const BUS_ID = "BUS-101-A"; // change based on driver
+
+        // ✔ CORRECT FIX: your backend base URL
+        const BACKEND_URL = "https://nightriders.onrender.com/api";  
+        const BUS_ID = "BUS-101-A"; // change per driver
 
         function sendLocation(lat, lng) {
             fetch(`${BACKEND_URL}/buses/update-location`, {
@@ -21,16 +23,18 @@
                 },
                 body: JSON.stringify({
                     bus_id: BUS_ID,
-                    latitude: lat,
-                    longitude: lng
+                    latitude: parseFloat(lat),
+                    longitude: parseFloat(lng)
                 })
             })
             .then(r => r.json())
             .then(data => {
+                console.log(data);
                 document.getElementById("status").innerHTML =
-                    `Updated: ${lat}, ${lng}`;
+                    `Updated → Lat: ${lat}, Lng: ${lng}`;
             })
             .catch(err => {
+                console.log(err);
                 document.getElementById("status").innerHTML =
                     "Error updating GPS";
             });
@@ -38,20 +42,20 @@
 
         function startTracking() {
             if (!navigator.geolocation) {
-                alert("GPS not supported on this device.");
+                alert("GPS not supported.");
                 return;
             }
 
             navigator.geolocation.watchPosition(
-                position => {
+                pos => {
                     sendLocation(
-                        position.coords.latitude,
-                        position.coords.longitude
+                        pos.coords.latitude,
+                        pos.coords.longitude
                     );
                 },
-                error => {
+                err => {
                     document.getElementById("status").innerHTML =
-                        "GPS permission denied!";
+                        "GPS Permission Denied!";
                 },
                 {
                     enableHighAccuracy: true,
@@ -62,7 +66,7 @@
         }
 
         startTracking();
-        setInterval(startTracking, 5000);
+
     </script>
 </body>
 </html>
