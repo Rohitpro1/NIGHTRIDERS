@@ -13,6 +13,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { toast, Toaster } from 'sonner';
 import { Bus, MapPin, Route as RouteIcon, Trash2, Edit, Plus, Search, LogOut, Navigation } from 'lucide-react';
+import MapView from "@/components/MapView";  
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
