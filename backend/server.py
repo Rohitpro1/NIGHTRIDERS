@@ -186,30 +186,28 @@ async def search_routes(q: Optional[str] = None):
     for route in routes:
         if isinstance(route.get('created_at'), str):
             route['created_at'] = datetime.fromisoformat(route['created_at'])
-    
-    return routes
-    from fastapi import Request
 
-@app.post("/buses/update-location")
+    return routes
+
+@api_router.post("/buses/update-location")
 async def update_bus_location(data: dict):
     bus_id = data.get("bus_id")
     latitude = data.get("latitude")
     longitude = data.get("longitude")
 
     if not all([bus_id, latitude, longitude]):
-        return {"error": "Missing fields"}
+        raise HTTPException(status_code=400, detail="Missing fields")
 
-    result = await db["buses"].update_one(
+    result = await db.buses.update_one(
         {"bus_id": bus_id},
         {"$set": {
             "latitude": latitude,
             "longitude": longitude,
-            "last_updated": datetime.utcnow()
+            "last_updated": datetime.utcnow().isoformat()
         }}
     )
 
     return {"status": "success", "updated": result.modified_count}
-
 
 @api_router.get("/buses/live")
 async def get_live_buses():
